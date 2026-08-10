@@ -1,5 +1,5 @@
 import { 
-  mkdirSync, existsSync, readdirSync, unlinkSync, copyFileSync, readFileSync 
+  existsSync, readdirSync, unlinkSync, readFileSync 
 } from "fs"
 import { join, dirname, basename } from "path"
 import { fileURLToPath } from "url"
@@ -14,6 +14,7 @@ import {
   getSessionsDir,
   runWithTimeout,
   shellQuote,
+  parseCommandFile,
 } from "./helpers.js"
 
 // Import from new core modules
@@ -51,36 +52,6 @@ const INIT_TIMEOUT_MS = 2000
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // ============ Internal Functions ============
-
-async function installCommands(client) {
-  try {
-    const paths = await client.path.get()
-    const configDir = paths.data?.config
-    if (!configDir) return
-    
-    const commandDir = join(configDir, "command")
-    mkdirSync(commandDir, { recursive: true })
-    
-    // Install all command files
-    const commands = ["devcontainer.md", "worktree.md", "workspaces.md"]
-    for (const cmd of commands) {
-      const sourceFile = join(__dirname, "command", cmd)
-      const destFile = join(commandDir, cmd)
-      if (existsSync(sourceFile)) {
-        copyFileSync(sourceFile, destFile)
-      }
-    }
-    
-    // Clean up old command file names
-    const oldFiles = ["ocdc-use.md", "ocdc.md"]
-    for (const oldName of oldFiles) {
-      const oldFile = join(commandDir, oldName)
-      if (existsSync(oldFile)) {
-        unlinkSync(oldFile)
-      }
-    }
-  } catch {}
-}
 
 async function cleanupStaleSessions() {
   const sessionsDir = getSessionsDir()
@@ -344,9 +315,6 @@ async function handleRemoveAll(sessionID, confirmed) {
 // ============ Plugin Export ============
 
 export const devcontainers = async ({ client }) => {
-  // Install command files if needed (don't block on slow API)
-  runWithTimeout(() => installCommands(client), INIT_TIMEOUT_MS)
-  
   // Cleanup stale sessions (don't block on slow API)
   runWithTimeout(() => cleanupStaleSessions(), INIT_TIMEOUT_MS)
   
@@ -354,6 +322,15 @@ export const devcontainers = async ({ client }) => {
   runWithTimeout(() => cleanupJobs(), INIT_TIMEOUT_MS)
   
   return {
+    // Register slash commands from plugin/command/*.md into the loaded config.
+    // This runs before the command state initializes, so the commands are
+    // available in the same session.
+    config: async (config) => {
+      for (const name of ["devcontainer", "worktree", "workspaces"]) {
+        const parsed = parseCommandFile(readFileSync(join(__dirname, "command", `${name}.md`), "utf8"))
+        if (parsed) config.command[name] = parsed
+      }
+    },
     tool: {
       // Execute command in devcontainer
       devcontainer_exec: tool({
