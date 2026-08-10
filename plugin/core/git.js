@@ -276,6 +276,18 @@ export async function getWorktreeMainRepo(worktreePath) {
 }
 
 /**
+ * Check if a local branch exists
+ *
+ * @param {string} dir - Directory of any git repo (main or worktree)
+ * @param {string} branch - Branch name (may contain slashes)
+ * @returns {Promise<boolean>} True if refs/heads/<branch> exists
+ */
+export async function branchExists(dir, branch) {
+  const result = await runGit(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], dir)
+  return result.exitCode === 0
+}
+
+/**
  * Create a git worktree
  * 
  * @param {string} mainRepo - Path to the main repository

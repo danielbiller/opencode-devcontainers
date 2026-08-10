@@ -21,6 +21,7 @@ import {
   saveSession,
   deleteSession,
   resolveWorkspace,
+  resolveWorktreeWorkspace,
   shellQuote,
 } from '../../plugin/helpers.js'
 
@@ -198,6 +199,67 @@ describe('resolveWorkspace', () => {
     const result = resolveWorkspace('shared-branch')
     assert.strictEqual(result.ambiguous, true)
     assert.strictEqual(result.matches.length, 2)
+  })
+})
+
+// ============ resolveWorktreeWorkspace Tests ============
+
+function makeWorktree(repo, branch, mainRepoName) {
+  // Fake a materialized worktree: dir + .git file with gitdir reference
+  const worktreePath = join(process.env.OCDC_WORKTREES_DIR, repo, branch)
+  mkdirSync(worktreePath, { recursive: true })
+  writeFileSync(join(worktreePath, '.git'), `gitdir: ${testDir}/${mainRepoName}/.git/worktrees/${branch}`)
+  return worktreePath
+}
+
+describe('resolveWorktreeWorkspace', () => {
+  beforeEach(() => {
+    process.env.OCDC_WORKTREES_DIR = join(testDir, 'worktrees')
+    mkdirSync(process.env.OCDC_WORKTREES_DIR, { recursive: true })
+  })
+
+  test('resolves slash-containing branch name as a whole branch', () => {
+    const worktreePath = makeWorktree('myrepo', 'fix/command-install', 'main-repo')
+
+    const result = resolveWorktreeWorkspace('fix/command-install')
+
+    assert.strictEqual(result.workspace, worktreePath)
+    assert.strictEqual(result.repoName, 'myrepo')
+    assert.strictEqual(result.branch, 'fix/command-install')
+    assert.strictEqual(result.mainRepo, join(testDir, 'main-repo'))
+  })
+
+  test('resolves repo/branch syntax', () => {
+    const worktreePath = makeWorktree('myrepo', 'feature-branch', 'main-repo')
+
+    const result = resolveWorktreeWorkspace('myrepo/feature-branch')
+
+    assert.strictEqual(result.workspace, worktreePath)
+    assert.strictEqual(result.repoName, 'myrepo')
+    assert.strictEqual(result.branch, 'feature-branch')
+  })
+
+  test('returns null when repo/branch first segment is not a repo dir', () => {
+    makeWorktree('myrepo', 'fix/command-install', 'main-repo')
+
+    const result = resolveWorktreeWorkspace('myrepo/command-install')
+
+    assert.strictEqual(result, null)
+  })
+
+  test('returns ambiguous when branch exists in multiple repos', () => {
+    makeWorktree('repo1', 'shared-branch', 'main-repo')
+    makeWorktree('repo2', 'shared-branch', 'main-repo')
+
+    const result = resolveWorktreeWorkspace('shared-branch')
+
+    assert.strictEqual(result.ambiguous, true)
+    assert.strictEqual(result.matches.length, 2)
+  })
+
+  test('returns null when nothing matches', () => {
+    const result = resolveWorktreeWorkspace('no-such-branch')
+    assert.strictEqual(result, null)
   })
 })
 

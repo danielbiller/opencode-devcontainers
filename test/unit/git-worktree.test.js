@@ -18,6 +18,7 @@ import {
   listWorktrees,
   isWorktree,
   getWorktreeMainRepo,
+  branchExists,
 } from '../../plugin/core/git.js'
 
 describe('isWorktree', () => {
@@ -118,6 +119,38 @@ describe('getWorktreeMainRepo', () => {
     mkdirSync(nonGitDir, { recursive: true })
     const result = await getWorktreeMainRepo(nonGitDir)
     assert.strictEqual(result, null)
+  })
+})
+
+describe('branchExists', () => {
+  const testDir = join(homedir(), '.cache/ocw-test-branchexists-' + Date.now())
+  const mainRepo = join(testDir, 'main')
+
+  beforeEach(() => {
+    mkdirSync(mainRepo, { recursive: true })
+
+    execSync('git init -b main', { cwd: mainRepo })
+    writeFileSync(join(mainRepo, 'README.md'), '# Test')
+    execSync('git add .', { cwd: mainRepo })
+    execSync('git commit -m "Initial commit"', { cwd: mainRepo })
+  })
+
+  afterEach(() => {
+    rmSync(testDir, { recursive: true, force: true })
+  })
+
+  test('returns true for existing branch', async () => {
+    execSync('git branch feature-x', { cwd: mainRepo })
+    assert.strictEqual(await branchExists(mainRepo, 'feature-x'), true)
+  })
+
+  test('returns false for unknown branch', async () => {
+    assert.strictEqual(await branchExists(mainRepo, 'no-such-branch'), false)
+  })
+
+  test('handles slash-containing branch names', async () => {
+    execSync('git branch fix/command-install', { cwd: mainRepo })
+    assert.strictEqual(await branchExists(mainRepo, 'fix/command-install'), true)
   })
 })
 

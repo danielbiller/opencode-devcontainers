@@ -116,6 +116,51 @@ describe('createWorktreeWorkspace', () => {
     )
   })
 
+  test('creates worktree for existing branch', async () => {
+    execSync('git branch existing-feature', { cwd: mainRepo })
+
+    const result = await createWorktreeWorkspace({
+      repoRoot: mainRepo,
+      branch: 'existing-feature',
+    })
+
+    assert.ok(existsSync(result.workspace))
+    const current = execSync('git branch --show-current', {
+      cwd: result.workspace,
+      encoding: 'utf-8',
+    }).trim()
+    assert.strictEqual(current, 'existing-feature')
+  })
+
+  test('creates worktree for existing slash-named branch', async () => {
+    execSync('git branch fix/command-install', { cwd: mainRepo })
+
+    const result = await createWorktreeWorkspace({
+      repoRoot: mainRepo,
+      branch: 'fix/command-install',
+    })
+
+    assert.ok(existsSync(result.workspace))
+    const current = execSync('git branch --show-current', {
+      cwd: result.workspace,
+      encoding: 'utf-8',
+    }).trim()
+    assert.strictEqual(current, 'fix/command-install')
+  })
+
+  test('throws clear error when branch is checked out elsewhere', async () => {
+    // main is checked out in the main repo — targeting it must fail with git's error
+
+    await assert.rejects(
+      () => createWorktreeWorkspace({
+        repoRoot: mainRepo,
+        branch: 'main',
+      }),
+      /already checked out at/i
+    )
+    assert.ok(!existsSync(join(process.env.OCDC_WORKTREES_DIR, 'main', 'main')), 'no worktree dir created')
+  })
+
   test('returns existing worktree without recreating', async () => {
     const result1 = await createWorktreeWorkspace({
       repoRoot: mainRepo,

@@ -91,6 +91,7 @@ export {
   createWorktree,
   removeWorktree,
   listWorktrees,
+  branchExists,
 } from './git.js'
 
 // Worktree workspace management
