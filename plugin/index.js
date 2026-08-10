@@ -11,7 +11,6 @@ import {
   deleteSession,
   resolveWorkspace,
   resolveWorktreeWorkspace,
-  shouldRunOnHost,
   getSessionsDir,
   runWithTimeout,
   shellQuote,
@@ -42,6 +41,8 @@ import {
   getWorkspaceStatus,
   findStaleWorkspaces,
   formatWorkspace,
+  // Session directory moves
+  moveSessionDirectory,
 } from "./core/index.js"
 
 // Timeout for init operations (2 seconds)
@@ -81,23 +82,23 @@ async function installCommands(client) {
   } catch {}
 }
 
-async function cleanupStaleSessions(client) {
+async function cleanupStaleSessions() {
   const sessionsDir = getSessionsDir()
   if (!existsSync(sessionsDir)) return
-  
-  try {
-    const response = await client.session.list()
-    const sessions = response.data || []
-    const activeIDs = new Set(sessions.map(s => s.id))
-    
-    for (const file of readdirSync(sessionsDir)) {
-      if (!file.endsWith(".json")) continue
-      const sessionID = file.replace(".json", "")
-      if (!activeIDs.has(sessionID)) {
+
+  // Age-based prune: session.list() only returns the current server's sessions,
+  // so a list-based check deleted every state file on each new process start.
+  // ponytail: mtime heuristic, session files are rewritten on every state change.
+  const maxAgeMs = 30 * 24 * 60 * 60 * 1000
+  const now = Date.now()
+  for (const file of readdirSync(sessionsDir)) {
+    if (!file.endsWith(".json")) continue
+    try {
+      if (now - statSync(join(sessionsDir, file)).mtimeMs > maxAgeMs) {
         unlinkSync(join(sessionsDir, file))
       }
-    }
-  } catch {}
+    } catch {}
+  }
 }
 
 /**
@@ -118,6 +119,32 @@ function buildDevcontainerExecCommand(workspace, command) {
   cmd += ` -- ${command}`
   
   return cmd
+}
+
+/**
+ * Fire-and-forget session move with error toast. Never fails the tool.
+ */
+function moveSessionTo(client, sessionID, directory) {
+  runWithTimeout(async () => {
+    const ok = await moveSessionDirectory(client, sessionID, directory)
+    if (!ok) {
+      await client.tui?.showToast?.({
+        body: {
+          title: "Session move failed",
+          message: `Could not move session directory to ${directory}`,
+          variant: "error",
+        },
+      })
+    }
+  }, INIT_TIMEOUT_MS)
+}
+
+/**
+ * Save worktree session state and fire-and-forget the move.
+ */
+function activateWorktree(client, sessionID, ws) {
+  saveSession(sessionID, { type: "worktree", ...ws })
+  moveSessionTo(client, sessionID, ws.workspace)
 }
 
 /**
@@ -321,7 +348,7 @@ export const devcontainers = async ({ client }) => {
   runWithTimeout(() => installCommands(client), INIT_TIMEOUT_MS)
   
   // Cleanup stale sessions (don't block on slow API)
-  runWithTimeout(() => cleanupStaleSessions(client), INIT_TIMEOUT_MS)
+  runWithTimeout(() => cleanupStaleSessions(), INIT_TIMEOUT_MS)
   
   // Cleanup old jobs (don't block)
   runWithTimeout(() => cleanupJobs(), INIT_TIMEOUT_MS)
@@ -566,16 +593,16 @@ export const devcontainers = async ({ client }) => {
           return `Session now targeting: ${repoName}/${branch}\n` +
                  `Workspace: ${workspace}\n\n` +
                  `All commands will run inside this container.\n` +
-                 `Use \`/devcontainer off\` to disable, or prefix with \`HOST:\` to run on host.`
+                 `Use \`/devcontainer off\` to disable.`
         }
       }),
       
       // Interactive command for manual worktree targeting
       worktree: tool({
-        description: "Set active git worktree for this session. Use 'off' to disable. Worktrees provide isolated branch work without devcontainers.",
+        description: "Set active git worktree for this session. Use 'exit' or 'quit' to restore to the main repo. Worktrees provide isolated branch work without devcontainers.",
         args: {
           target: tool.schema.string().optional().describe(
-            "Branch name (e.g., 'feature-x'), 'off' to disable, or empty for status"
+            "Branch name (e.g., 'feature-x'), 'exit'/'quit' to restore, or empty for status"
           ),
           workdir: tool.schema.string().optional().describe(
             "Working directory (git repository) to create worktree from. Defaults to current directory."
@@ -602,17 +629,32 @@ export const devcontainers = async ({ client }) => {
             return `Current worktree: ${session.repoName}/${session.branch}\n` +
                    `Workspace: ${session.workspace}\n` +
                    `Main repo: ${session.mainRepo}\n` +
-                   `\nAll bash commands will run in this worktree directory.\n` +
-                   `Use \`/worktree off\` to disable.`
+                   `\nThe session will run in this worktree directory.\n` +
+                   `Use \`/worktree exit\` to return to the main repo.`
           }
           
           // Disable request
-          if (target === "off") {
+          if (target === "off" || target === "exit" || target === "quit") {
             const session = loadSession(sessionID)
-            deleteSession(sessionID)
             if (session && session.type === "worktree") {
-              return `Worktree mode disabled. Commands will now run in the current directory.`
+              const ok = await moveSessionDirectory(client, sessionID, session.mainRepo)
+              if (!ok) {
+                try {
+                  await client.tui?.showToast?.({
+                    body: {
+                      title: "Session move failed",
+                      message: `Could not move session back to ${session.mainRepo}`,
+                      variant: "error",
+                    },
+                  })
+                } catch {}
+                return `Session was not moved: could not restore directory to ${session.mainRepo}.\n` +
+                       `Session state kept — run \`/worktree exit\` again to retry.`
+              }
+              deleteSession(sessionID)
+              return `Worktree mode exited. Session moved back to: ${session.mainRepo}`
             }
+            deleteSession(sessionID)
             if (session) {
               return `Session was targeting a devcontainer, not a worktree. Session cleared.`
             }
@@ -640,19 +682,12 @@ export const devcontainers = async ({ client }) => {
           if (resolved && !resolved.ambiguous) {
             const { workspace, repoName, branch, mainRepo } = resolved
             
-            // Save session state
-            saveSession(sessionID, {
-              type: "worktree",
-              branch,
-              workspace,
-              repoName,
-              mainRepo,
-            })
+            activateWorktree(client, sessionID, { branch, workspace, repoName, mainRepo })
             
             return `Session now targeting worktree: ${repoName}/${branch}\n` +
                    `Workspace: ${workspace}\n\n` +
-                   `All bash commands will run in this worktree directory.\n` +
-                   `Use \`/worktree off\` to disable, or prefix with \`HOST:\` to run in original directory.`
+                   `The session will run in this worktree directory.\n` +
+                   `Use \`/worktree exit\` to return to the main repo.`
           }
           
           if (resolved?.ambiguous) {
@@ -670,19 +705,13 @@ export const devcontainers = async ({ client }) => {
               branch: target,
             })
             
-            saveSession(sessionID, {
-              type: "worktree",
-              branch: result.branch,
-              workspace: result.workspace,
-              repoName: result.repoName,
-              mainRepo: result.mainRepo,
-            })
+            activateWorktree(client, sessionID, result)
             
             return `Created worktree for ${result.repoName}/${result.branch}\n` +
                    `Workspace: ${result.workspace}\n\n` +
-                   `All bash commands will run in this worktree directory.\n` +
+                   `The session will run in this worktree directory.\n` +
                    `Gitignored files (secrets, .env) have been copied from main repo.\n` +
-                   `Use \`/worktree off\` to disable.`
+                   `Use \`/worktree exit\` to return to the main repo.`
           } catch (err) {
             return `Failed to create worktree: ${err.message}`
           }
@@ -786,22 +815,10 @@ export const devcontainers = async ({ client }) => {
       let cmd = output.args?.command?.trim()
       if (!cmd) return
       
-      const hostCheck = shouldRunOnHost(cmd)
-      
-      // Check for HOST: escape hatch
-      if (hostCheck === "escape") {
-        output.args.command = cmd.replace(/^HOST:\s*/i, "")
-        return
-      }
-      
-      // Check if command should run on host
-      if (hostCheck) return
-      
-      // Handle worktree sessions - just set workdir, no container wrapping
-      if (session.type === "worktree") {
-        output.args.workdir = session.workspace
-        return
-      }
+      // Worktree sessions need no interception - the session directory
+      // follows the worktree via session.move. Do NOT fall through to
+      // devcontainer wrapping.
+      if (session.type === "worktree") return
       
       // Handle devcontainer sessions
       // Check if container is still starting - provide helpful error instead of cryptic failure

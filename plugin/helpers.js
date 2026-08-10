@@ -54,30 +54,6 @@ export function getWorktreesDir() {
     join(process.env.HOME, ".local/share/opencode/worktree")
 }
 
-// Commands that should always run on host, not in container
-export const HOST_COMMANDS = [
-  // File navigation
-  'cd', 'ls', 'pwd', 'find', 'tree',
-  // File reading (opencode uses these)
-  'cat', 'head', 'tail', 'less', 'more', 'wc',
-  // File editing/searching (opencode uses these)
-  'sed', 'awk', 'grep', 'rg', 'ed',
-  // Git (always on host - repo is mounted)
-  'git', 'gh',
-  // Editors/IDEs
-  'code', 'vim', 'nvim', 'nano', 'open', 'cursor',
-  // System inspection
-  'which', 'type', 'echo', 'env', 'printenv', 'whoami', 'hostname',
-  // devcontainer/opencode commands (prevent recursion)
-  'devcontainer', 'opencode',
-  // direnv for environment setup
-  'direnv',
-  // Package managers (global installs on host)
-  'brew', 'apt', 'apt-get', 'yum', 'dnf',
-  // Docker (runs on host, not inside container)
-  'docker', 'docker-compose',
-]
-
 // ============ Session Management ============
 
 // In-memory cache to avoid repeated file reads on every bash command
@@ -270,22 +246,6 @@ function getMainRepoFromWorktree(worktreePath) {
   } catch {
     return null
   }
-}
-
-// ============ Command Classification ============
-
-export function shouldRunOnHost(command) {
-  if (!command || !command.trim()) return true
-  
-  const trimmed = command.trim()
-  
-  // Check for HOST: escape hatch (case-insensitive)
-  if (trimmed.toUpperCase().startsWith("HOST:")) {
-    return "escape"
-  }
-  
-  const firstWord = trimmed.split(/\s+/)[0]
-  return HOST_COMMANDS.includes(firstWord)
 }
 
 // ============ Secure Command Execution ============

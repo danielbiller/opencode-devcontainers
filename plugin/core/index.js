@@ -101,6 +101,11 @@ export {
   removeWorktreeWorkspace,
 } from './worktree.js'
 
+// Session directory moves
+export {
+  moveSessionDirectory,
+} from './sessionMove.js'
+
 // Unified workspace management
 export {
   listAllWorkspaces,

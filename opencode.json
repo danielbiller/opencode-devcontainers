@@ -1,9 +1,13 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/gpt-5-nano",
   "agent": {
+    "plan": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "reasoningEffort": "max"
+    },
     "build": {
-      "model": "opencode/trinity-large-preview-free"
+      "model": "opencode/deepseek-v4-flash-free",
+      "reasoningEffort": "max"
     }
   }
 }

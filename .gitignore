@@ -26,3 +26,5 @@ test/tmp/
 # Local environment
 .env
 .env.local
+
+opencode-dir/

@@ -17,12 +17,10 @@ import {
   getCacheDir,
   getSessionsDir,
   getClonesDir,
-  HOST_COMMANDS,
   loadSession,
   saveSession,
   deleteSession,
   resolveWorkspace,
-  shouldRunOnHost,
   shellQuote,
 } from '../../plugin/helpers.js'
 
@@ -107,37 +105,6 @@ describe('getSessionsDir', () => {
 describe('getClonesDir', () => {
   test('uses env var when set', () => {
     assert.strictEqual(getClonesDir(), process.env.OCDC_CLONES_DIR)
-  })
-})
-
-// ============ HOST_COMMANDS Tests ============
-
-describe('HOST_COMMANDS', () => {
-  test('is a non-empty array', () => {
-    assert.ok(Array.isArray(HOST_COMMANDS))
-    assert.ok(HOST_COMMANDS.length > 0)
-  })
-
-  test('includes git', () => {
-    assert.ok(HOST_COMMANDS.includes('git'))
-  })
-
-  test('includes file reading commands', () => {
-    const fileCommands = ['cat', 'head', 'tail', 'grep', 'ls']
-    for (const cmd of fileCommands) {
-      assert.ok(HOST_COMMANDS.includes(cmd), `Should include ${cmd}`)
-    }
-  })
-
-  test('includes devcontainer to prevent recursion', () => {
-    assert.ok(HOST_COMMANDS.includes('devcontainer'))
-  })
-
-  test('excludes dev tools (should run in container)', () => {
-    const devTools = ['npm', 'yarn', 'pnpm', 'bundle', 'rails', 'python', 'pip', 'cargo', 'make']
-    for (const cmd of devTools) {
-      assert.ok(!HOST_COMMANDS.includes(cmd), `Should NOT include ${cmd}`)
-    }
   })
 })
 
@@ -231,44 +198,6 @@ describe('resolveWorkspace', () => {
     const result = resolveWorkspace('shared-branch')
     assert.strictEqual(result.ambiguous, true)
     assert.strictEqual(result.matches.length, 2)
-  })
-})
-
-// ============ shouldRunOnHost Tests ============
-
-describe('shouldRunOnHost', () => {
-  test('returns true for git commands', () => {
-    const gitCommands = ['git status', 'git push', 'git log --oneline', 'git diff HEAD~1']
-    for (const cmd of gitCommands) {
-      assert.ok(shouldRunOnHost(cmd), `${cmd} should run on host`)
-    }
-  })
-
-  test('returns true for file reading commands', () => {
-    const fileCommands = ['cat file.txt', 'head -n 10 file.txt', 'tail -f log.txt', 'grep pattern file']
-    for (const cmd of fileCommands) {
-      assert.ok(shouldRunOnHost(cmd), `${cmd} should run on host`)
-    }
-  })
-
-  test('returns false for dev commands', () => {
-    const devCommands = ['npm install', 'yarn test', 'python script.py', 'make build']
-    for (const cmd of devCommands) {
-      assert.ok(!shouldRunOnHost(cmd), `${cmd} should run in container`)
-    }
-  })
-
-  test('returns "escape" for HOST: prefix', () => {
-    assert.strictEqual(shouldRunOnHost('HOST: npm install'), 'escape')
-    assert.strictEqual(shouldRunOnHost('host: npm install'), 'escape')
-    assert.strictEqual(shouldRunOnHost('HOST:npm install'), 'escape')
-  })
-
-  test('returns true for empty commands', () => {
-    assert.ok(shouldRunOnHost(''))
-    assert.ok(shouldRunOnHost('   '))
-    assert.ok(shouldRunOnHost(null))
-    assert.ok(shouldRunOnHost(undefined))
   })
 })
 
