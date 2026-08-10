@@ -32,12 +32,12 @@ Thanks for your interest in contributing!
 
 ## Running Tests
 
-Run the full test suite:
+Run the full test suite (unit + integration):
 ```bash
 npm test
 ```
 
-Run tests in watch mode:
+Integration tests need Docker and self-skip when it's unavailable. Run unit tests in watch mode:
 ```bash
 npm run test:watch
 ```
@@ -65,11 +65,9 @@ opencode-devcontainers/
 │       ├── sessionMove.js  # Session directory moves (experimental session.move API)
 │       ├── worktree.js     # Worktree workspace management
 │       └── workspaces.js   # Unified workspace listing/cleanup
-├── skill/
-│   └── ocdc/
-│       └── SKILL.md        # Agent skill documentation
 └── test/
-    └── unit/               # Unit tests
+    ├── unit/               # Unit tests
+    └── integration/        # Integration tests (need Docker; self-skip when unavailable)
 ```
 
 ## Writing Tests

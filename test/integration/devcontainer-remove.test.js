@@ -13,7 +13,13 @@ import { PATHS } from '../../plugin/core/paths.js'
 
 const IMAGE = 'alpine:3.19'
 
-describe('remove (integration)', () => {
+let hasDocker = false
+try {
+  execSync('docker version', { stdio: 'ignore' })
+  hasDocker = true
+} catch {}
+
+describe('remove (integration)', { skip: !hasDocker }, () => {
   const testDir = join(homedir(), '.cache/ocdc-int-rm-' + Date.now())
   const workspace = join(testDir, 'clones', 'my-repo', 'feature-x')
   const repo = 'my-repo'

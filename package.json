@@ -28,7 +28,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test test/unit/*.test.js",
+    "test": "node --test test/unit/*.test.js test/integration/*.test.js",
     "test:watch": "node --test --watch test/unit/*.test.js",
     "semantic-release": "semantic-release"
   },
