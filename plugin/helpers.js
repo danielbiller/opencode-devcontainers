@@ -173,54 +173,21 @@ export function resolveWorkspace(branchArg) {
  */
 export function resolveWorktreeWorkspace(branchArg) {
   const worktreesDir = getWorktreesDir()
-  let repoName = null
-  let branch = branchArg
-  
-  // Handle repo/branch syntax
-  if (branchArg.includes("/")) {
-    const parts = branchArg.split("/")
-    repoName = parts[0]
-    branch = parts.slice(1).join("/")
-  }
-  
-  // If repo specified, look directly
-  if (repoName) {
-    const worktreePath = join(worktreesDir, repoName, branch)
-    if (existsSync(worktreePath)) {
-      // Read .git file to get main repo path
-      const mainRepo = getMainRepoFromWorktree(worktreePath)
-      return { workspace: worktreePath, repoName, branch, mainRepo, repo: repoName }
-    }
-    return null
-  }
-  
-  // Try to infer repo from current directory
-  try {
-    const gitRoot = execSync("git rev-parse --show-toplevel", { 
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"]
-    }).trim()
-    repoName = basename(gitRoot)
-    const worktreePath = join(worktreesDir, repoName, branch)
-    if (existsSync(worktreePath)) {
-      return { workspace: worktreePath, repoName, branch, mainRepo: gitRoot, repo: repoName }
-    }
-  } catch {}
-  
-  // Search all repos for this branch
+
+  // Whole-branch search first: target may be a slash-containing branch name
+  const matches = []
   if (existsSync(worktreesDir)) {
-    const matches = []
     for (const repo of readdirSync(worktreesDir)) {
       const repoPath = join(worktreesDir, repo)
       try {
         const stat = statSync(repoPath)
         if (!stat.isDirectory()) continue
       } catch { continue }
-      
-      const worktreePath = join(repoPath, branch)
+
+      const worktreePath = join(repoPath, branchArg)
       if (existsSync(worktreePath)) {
         const mainRepo = getMainRepoFromWorktree(worktreePath)
-        matches.push({ workspace: worktreePath, repoName: repo, branch, mainRepo, repo })
+        matches.push({ workspace: worktreePath, repoName: repo, branch: branchArg, mainRepo, repo })
       }
     }
     if (matches.length === 1) return matches[0]
@@ -228,7 +195,21 @@ export function resolveWorktreeWorkspace(branchArg) {
       return { ambiguous: true, matches }
     }
   }
-  
+
+  // repo/branch syntax fallback — only when the first segment is a real repo dir
+  if (branchArg.includes("/")) {
+    const [repoName, ...rest] = branchArg.split("/")
+    const branch = rest.join("/")
+    const repoPath = join(worktreesDir, repoName)
+    if (existsSync(repoPath)) {
+      const worktreePath = join(repoPath, branch)
+      if (existsSync(worktreePath)) {
+        const mainRepo = getMainRepoFromWorktree(worktreePath)
+        return { workspace: worktreePath, repoName, branch, mainRepo, repo: repoName }
+      }
+    }
+  }
+
   return null
 }
 

@@ -16,6 +16,7 @@ import {
   isWorktree,
   getRepoRoot,
   isGitRepo,
+  branchExists,
 } from './git.js'
 import { copyGitignored } from './clones.js'
 
@@ -73,8 +74,7 @@ export async function createWorktreeWorkspace(options) {
   // Create parent directory
   await mkdir(dirname(workspace), { recursive: true })
   
-  // Create worktree
-  await gitCreateWorktree(repoRoot, branch, workspace)
+  await gitCreateWorktree(repoRoot, branch, workspace, { createBranch: !(await branchExists(repoRoot, branch)) })
   
   // Copy gitignored files (secrets, local config)
   await copyGitignored(repoRoot, workspace)
