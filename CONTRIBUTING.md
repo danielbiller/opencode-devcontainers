@@ -62,6 +62,7 @@ opencode-devcontainers/
 │       ├── jobs.js         # Background job tracking
 │       ├── paths.js        # Path constants and migration
 │       ├── ports.js        # Port allocation
+│       ├── sessionMove.js  # Session directory moves (experimental session.move API)
 │       ├── worktree.js     # Worktree workspace management
 │       └── workspaces.js   # Unified workspace listing/cleanup
 ├── skill/

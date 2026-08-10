@@ -50,7 +50,6 @@ OpenCode automatically installs npm plugins on startup.
 When a devcontainer is targeted:
 - Most commands run inside the container automatically
 - Git operations and file reading run on host
-- Prefix with `HOST:` to force host execution
 
 ### Worktrees (Lightweight Filesystem Isolation)
 
@@ -58,13 +57,14 @@ When a devcontainer is targeted:
 /worktree feature-x        # Create/target a worktree for this branch
 /worktree myapp/main       # Target specific repo/branch
 /worktree                  # Show current status
-/worktree off              # Disable, run commands in original directory
+/worktree exit             # Return to the main repo (alias: quit)
 ```
 
 When a worktree is targeted:
-- Bash commands run in the worktree directory
-- Same `HOST:` prefix for escaping
+- The session directory moves to the worktree: all tools, commands, and the diff viewer operate on the worktree
 - Gitignored files are automatically copied from main repo
+- The session stays listed in the original directory's session list
+- `/worktree exit` moves the session back to the main repo; the worktree stays on disk
 
 ### Workspace Management
 
@@ -105,7 +105,7 @@ When a worktree is targeted:
 1. Creates worktree in `~/.local/share/opencode/worktree/<repo>/<branch>/`
 2. Copies gitignored secrets from main repo
 3. Runs `direnv allow` if .envrc exists
-4. Sets bash workdir to the worktree path
+4. Moves the session directory to the worktree via the experimental `session.move` API
 
 ### Port/Database Isolation (Worktrees)
 
@@ -138,13 +138,15 @@ This starts an isolated devcontainer for each issue automatically.
 
 ## Known Issues
 
-### OpenCode Desktop shows changes from wrong directory
+### OpenCode Desktop shows changes from wrong directory for devcontainers
 
-When switching workspaces with `/devcontainer` or `/worktree`, OpenCode's internal directory context doesn't update. The "Session changes" panel continues showing diffs from the original directory.
+When switching workspaces with `/devcontainer`, OpenCode's internal directory context doesn't update. The "Session changes" panel continues showing diffs from the original directory.
 
 **Workaround**: Start OpenCode directly in the target directory, or use separate terminal sessions per workspace.
 
 **Upstream issue**: [anomalyco/opencode#6697](https://github.com/anomalyco/opencode/issues/6697)
+
+Worktree sessions are not affected: `/worktree` moves the session directory itself, so the diff viewer and session context follow the worktree.
 
 ## Environment Variables
 
