@@ -31,6 +31,16 @@ export async function runWithTimeout(fn, ms) {
   }
 }
 
+/**
+ * Parses a command markdown file (YAML frontmatter + body) into an opencode
+ * config command entry. Returns null if the file is malformed.
+ */
+export function parseCommandFile(content) {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
+  const description = match?.[1]?.match(/^description:\s*(.+)$/m)?.[1]?.trim()
+  return description ? { description, template: match[2].trim() } : null
+}
+
 // Directory getters - respect environment variables
 export function getCacheDir() {
   return process.env.OCDC_CACHE_DIR || 

@@ -31,6 +31,8 @@ Add to your `~/.config/opencode/opencode.json`:
 
 OpenCode automatically installs npm plugins on startup.
 
+The `/devcontainer`, `/worktree`, and `/workspaces` commands are registered through the plugin's `config` hook (the official opencode plugin API for contributing commands) and are available immediately after the plugin loads.
+
 ### Dependencies
 
 - For devcontainers: `devcontainer` CLI - Install with: `npm install -g @devcontainers/cli`
